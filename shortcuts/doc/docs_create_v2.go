@@ -56,9 +56,10 @@ func executeCreateV2(_ context.Context, runtime *common.RuntimeContext) error {
 }
 
 func buildCreateBody(runtime *common.RuntimeContext) map[string]interface{} {
+	format := runtime.Str("doc-format")
 	body := map[string]interface{}{
-		"format":  runtime.Str("doc-format"),
-		"content": runtime.Str("content"),
+		"format":  format,
+		"content": normalizeDocInputContent(format, runtime.Str("content")),
 	}
 	if v := runtime.Str("parent-token"); v != "" {
 		body["parent_token"] = v

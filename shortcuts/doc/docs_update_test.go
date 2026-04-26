@@ -30,6 +30,21 @@ func TestValidCommandsV2(t *testing.T) {
 	}
 }
 
+func TestBuildUpdateBodyV2NormalizesVideoCompatMarkup(t *testing.T) {
+	t.Parallel()
+
+	runtime := newDocCompatRuntime(t, map[string]string{
+		"command":    "overwrite",
+		"doc-format": "xml",
+		"content":    `<video controls src="feishu://media/file_video_123" data-name="demo.mp4"></video>`,
+	})
+
+	body := buildUpdateBody(runtime)
+	if got := body["content"]; got != `<file token="file_video_123" name="demo.mp4"/>` {
+		t.Fatalf("buildUpdateBody().content = %#v", got)
+	}
+}
+
 // ── V1 tests ──
 
 func TestIsWhiteboardCreateMarkdown(t *testing.T) {

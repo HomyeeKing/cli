@@ -135,6 +135,7 @@ func executeUpdateV2(_ context.Context, runtime *common.RuntimeContext) error {
 
 func buildUpdateBody(runtime *common.RuntimeContext) map[string]interface{} {
 	cmd := runtime.Str("command")
+	format := runtime.Str("doc-format")
 
 	// append is a shorthand for block_insert_after with block_id "-1" (end of document)
 	blockID := runtime.Str("block-id")
@@ -144,14 +145,14 @@ func buildUpdateBody(runtime *common.RuntimeContext) map[string]interface{} {
 	}
 
 	body := map[string]interface{}{
-		"format":  runtime.Str("doc-format"),
+		"format":  format,
 		"command": cmd,
 	}
 	if v := runtime.Int("revision-id"); v != 0 {
 		body["revision_id"] = v
 	}
 	if v := runtime.Str("content"); v != "" {
-		body["content"] = v
+		body["content"] = normalizeDocInputContent(format, v)
 	}
 	if v := runtime.Str("pattern"); v != "" {
 		body["pattern"] = v

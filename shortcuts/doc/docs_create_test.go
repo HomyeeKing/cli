@@ -182,6 +182,20 @@ func TestDocsCreateV2BotAutoGrantFailureDoesNotFailCreate(t *testing.T) {
 	}
 }
 
+func TestBuildCreateBodyV2NormalizesVideoCompatMarkup(t *testing.T) {
+	t.Parallel()
+
+	runtime := newDocCompatRuntime(t, map[string]string{
+		"doc-format": "xml",
+		"content":    `<video controls src="feishu://media/file_video_123" data-name="demo.mp4" data-view-type="2"></video>`,
+	})
+
+	body := buildCreateBody(runtime)
+	if got := body["content"]; got != `<file token="file_video_123" name="demo.mp4" view-type="2"/>` {
+		t.Fatalf("buildCreateBody().content = %#v", got)
+	}
+}
+
 // ── V1 (MCP) tests ──
 
 func TestDocsCreateV1BotAutoGrantSuccess(t *testing.T) {
