@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -68,8 +67,6 @@ func executeFetchV2(_ context.Context, runtime *common.RuntimeContext) error {
 	if err != nil {
 		return err
 	}
-	normalizeFetchedDocumentContent(data, runtime.Str("doc-format"))
-
 	runtime.OutFormatRaw(data, nil, func(w io.Writer) {
 		if doc, ok := data["document"].(map[string]interface{}); ok {
 			if content, ok := doc["content"].(string); ok {
@@ -78,128 +75,6 @@ func executeFetchV2(_ context.Context, runtime *common.RuntimeContext) error {
 		}
 	})
 	return nil
-}
-
-var (
-	fetchedVideoFileTagRe   = regexp.MustCompile(`<file\s+([^>]*\btoken="([^"]+)"[^>]*\bname="([^"]+)"[^>]*)/>`)
-	fetchedVideoFigureTagRe = regexp.MustCompile(`<figure\s+([^>]*?)><source\s+([^>]*?)token="([^"]+)"([^>]*?)/></figure>`)
-	fetchedSheetIDTagRe     = regexp.MustCompile(`<sheet\s+([^>]*?)sheet-id="([^"]+)"([^>]*?)(?:></sheet>|/>)`)
-)
-
-// normalizeFetchedDocumentContent applies lightweight export rewrites so the
-// current CLI can surface a couple of higher-level compatibility behaviors from
-// the legacy converter pipeline without reintroducing that entire subsystem.
-func normalizeFetchedDocumentContent(data map[string]interface{}, format string) {
-	if strings.TrimSpace(format) == "text" {
-		return
-	}
-	doc, _ := data["document"].(map[string]interface{})
-	if doc == nil {
-		return
-	}
-	content, _ := doc["content"].(string)
-	if content == "" {
-		return
-	}
-	content = normalizeFetchedVideoTags(content)
-	content = normalizeFetchedSheetTags(content)
-	doc["content"] = content
-}
-
-func normalizeFetchedVideoTags(content string) string {
-	content = fetchedVideoFigureTagRe.ReplaceAllStringFunc(content, func(tag string) string {
-		m := fetchedVideoFigureTagRe.FindStringSubmatch(tag)
-		if len(m) != 5 {
-			return tag
-		}
-		viewType := strings.TrimSpace(fetchedAttrValue(tag, "view-type"))
-		token := strings.TrimSpace(m[3])
-		mime := strings.TrimSpace(fetchedAttrValue(tag, "mime"))
-
-		attrs := []string{"controls"}
-		if token != "" {
-			attrs = append(attrs, fmt.Sprintf(`src="feishu://media/%s"`, token))
-		}
-		if mime != "" {
-			attrs = append(attrs, fmt.Sprintf(`data-mime="%s"`, mime))
-		}
-		if viewType != "" {
-			attrs = append(attrs, fmt.Sprintf(`data-view-type="%s"`, viewType))
-		}
-		return fmt.Sprintf("<video %s></video>", strings.Join(attrs, " "))
-	})
-
-	return fetchedVideoFileTagRe.ReplaceAllStringFunc(content, func(tag string) string {
-		m := fetchedVideoFileTagRe.FindStringSubmatch(tag)
-		if len(m) != 4 {
-			return tag
-		}
-		token := strings.TrimSpace(m[2])
-		name := strings.TrimSpace(m[3])
-		if !isFetchedVideoFilename(name) {
-			return tag
-		}
-
-		attrs := []string{"controls"}
-		if token != "" {
-			attrs = append(attrs, fmt.Sprintf(`src="feishu://media/%s"`, token))
-		}
-		if name != "" {
-			attrs = append(attrs, fmt.Sprintf(`data-name="%s"`, name))
-		}
-		if viewType := fetchedAttrValue(tag, "view-type"); viewType != "" {
-			attrs = append(attrs, fmt.Sprintf(`data-view-type="%s"`, viewType))
-		}
-		return fmt.Sprintf("<video %s></video>", strings.Join(attrs, " "))
-	})
-}
-
-func normalizeFetchedSheetTags(content string) string {
-	return fetchedSheetIDTagRe.ReplaceAllStringFunc(content, func(tag string) string {
-		m := fetchedSheetIDTagRe.FindStringSubmatch(tag)
-		if len(m) != 4 || strings.Contains(tag, ` id="`) {
-			return tag
-		}
-		sheetID := strings.TrimSpace(m[2])
-		if sheetID == "" {
-			return tag
-		}
-		return strings.Replace(tag, fmt.Sprintf(`sheet-id="%s"`, sheetID), fmt.Sprintf(`id="%s"`, sheetID), 1)
-	})
-}
-
-func fetchedAttrValue(tag, attr string) string {
-	needle := attr + `="`
-	idx := strings.Index(tag, needle)
-	if idx == -1 {
-		return ""
-	}
-	start := idx + len(needle)
-	end := strings.Index(tag[start:], `"`)
-	if end == -1 {
-		return ""
-	}
-	return tag[start : start+end]
-}
-
-func isFetchedVideoFilename(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	switch {
-	case strings.HasSuffix(name, ".mp4"):
-		return true
-	case strings.HasSuffix(name, ".mov"):
-		return true
-	case strings.HasSuffix(name, ".m4v"):
-		return true
-	case strings.HasSuffix(name, ".webm"):
-		return true
-	case strings.HasSuffix(name, ".avi"):
-		return true
-	case strings.HasSuffix(name, ".mkv"):
-		return true
-	default:
-		return false
-	}
 }
 
 func buildFetchBody(runtime *common.RuntimeContext) map[string]interface{} {

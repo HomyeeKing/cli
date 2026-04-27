@@ -49,3 +49,17 @@ func normalizeInputVideoTags(content string) string {
 		return fmt.Sprintf("<file %s/>", strings.Join(attrs, " "))
 	})
 }
+
+func fetchedAttrValue(tag, attr string) string {
+	needle := attr + `="`
+	idx := strings.Index(tag, needle)
+	if idx == -1 {
+		return ""
+	}
+	start := idx + len(needle)
+	end := strings.Index(tag[start:], `"`)
+	if end == -1 {
+		return ""
+	}
+	return tag[start : start+end]
+}
