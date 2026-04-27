@@ -81,8 +81,9 @@ func executeFetchV2(_ context.Context, runtime *common.RuntimeContext) error {
 }
 
 var (
-	fetchedVideoFileTagRe = regexp.MustCompile(`<file\s+([^>]*\btoken="([^"]+)"[^>]*\bname="([^"]+)"[^>]*)/>`)
-	fetchedSheetTagRe     = regexp.MustCompile(`<sheet\s+([^>]*?)token="([^"]+)"([^>]*?)/>`)
+	fetchedVideoFileTagRe   = regexp.MustCompile(`<file\s+([^>]*\btoken="([^"]+)"[^>]*\bname="([^"]+)"[^>]*)/>`)
+	fetchedVideoFigureTagRe = regexp.MustCompile(`<figure\s+([^>]*?)><source\s+([^>]*?)token="([^"]+)"([^>]*?)/></figure>`)
+	fetchedSheetIDTagRe     = regexp.MustCompile(`<sheet\s+([^>]*?)sheet-id="([^"]+)"([^>]*?)(?:></sheet>|/>)`)
 )
 
 // normalizeFetchedDocumentContent applies lightweight export rewrites so the
@@ -106,6 +107,28 @@ func normalizeFetchedDocumentContent(data map[string]interface{}, format string)
 }
 
 func normalizeFetchedVideoTags(content string) string {
+	content = fetchedVideoFigureTagRe.ReplaceAllStringFunc(content, func(tag string) string {
+		m := fetchedVideoFigureTagRe.FindStringSubmatch(tag)
+		if len(m) != 5 {
+			return tag
+		}
+		viewType := strings.TrimSpace(fetchedAttrValue(tag, "view-type"))
+		token := strings.TrimSpace(m[3])
+		mime := strings.TrimSpace(fetchedAttrValue(tag, "mime"))
+
+		attrs := []string{"controls"}
+		if token != "" {
+			attrs = append(attrs, fmt.Sprintf(`src="feishu://media/%s"`, token))
+		}
+		if mime != "" {
+			attrs = append(attrs, fmt.Sprintf(`data-mime="%s"`, mime))
+		}
+		if viewType != "" {
+			attrs = append(attrs, fmt.Sprintf(`data-view-type="%s"`, viewType))
+		}
+		return fmt.Sprintf("<video %s></video>", strings.Join(attrs, " "))
+	})
+
 	return fetchedVideoFileTagRe.ReplaceAllStringFunc(content, func(tag string) string {
 		m := fetchedVideoFileTagRe.FindStringSubmatch(tag)
 		if len(m) != 4 {
@@ -132,17 +155,16 @@ func normalizeFetchedVideoTags(content string) string {
 }
 
 func normalizeFetchedSheetTags(content string) string {
-	return fetchedSheetTagRe.ReplaceAllStringFunc(content, func(tag string) string {
-		m := fetchedSheetTagRe.FindStringSubmatch(tag)
+	return fetchedSheetIDTagRe.ReplaceAllStringFunc(content, func(tag string) string {
+		m := fetchedSheetIDTagRe.FindStringSubmatch(tag)
 		if len(m) != 4 || strings.Contains(tag, ` id="`) {
 			return tag
 		}
-		token := strings.TrimSpace(m[2])
-		prefix, id, ok := strings.Cut(token, "_")
-		if !ok || prefix == "" || id == "" {
+		sheetID := strings.TrimSpace(m[2])
+		if sheetID == "" {
 			return tag
 		}
-		return strings.Replace(tag, fmt.Sprintf(`token="%s"`, token), fmt.Sprintf(`token="%s" id="%s"`, prefix, id), 1)
+		return strings.Replace(tag, fmt.Sprintf(`sheet-id="%s"`, sheetID), fmt.Sprintf(`id="%s"`, sheetID), 1)
 	})
 }
 

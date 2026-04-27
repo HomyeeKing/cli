@@ -16,6 +16,17 @@ func TestNormalizeFetchedVideoTags(t *testing.T) {
 	}
 }
 
+func TestNormalizeFetchedVideoFigureTags(t *testing.T) {
+	t.Parallel()
+
+	input := `<figure view-type="Preview"><source href="https://example.com/video" mime="video/quicktime" token="RXwJbGRG9orDqhxuYKvch0TqnBf"/></figure>`
+	got := normalizeFetchedVideoTags(input)
+	want := `<video controls src="feishu://media/RXwJbGRG9orDqhxuYKvch0TqnBf" data-mime="video/quicktime" data-view-type="Preview"></video>`
+	if got != want {
+		t.Fatalf("normalizeFetchedVideoTags() = %q, want %q", got, want)
+	}
+}
+
 func TestNormalizeFetchedVideoTagsPreservesViewType(t *testing.T) {
 	t.Parallel()
 
@@ -39,9 +50,9 @@ func TestNormalizeFetchedVideoTagsLeavesNonVideoFileAlone(t *testing.T) {
 func TestNormalizeFetchedSheetTags(t *testing.T) {
 	t.Parallel()
 
-	input := `<sheet token="sheet_xyz" rows="5" cols="8"/>`
+	input := `<sheet sheet-id="jkxrFs" token="FhJTsZVIihsBEStE5RVcr6Fbnrf"></sheet>`
 	got := normalizeFetchedSheetTags(input)
-	want := `<sheet token="sheet" id="xyz" rows="5" cols="8"/>`
+	want := `<sheet id="jkxrFs" token="FhJTsZVIihsBEStE5RVcr6Fbnrf"></sheet>`
 	if got != want {
 		t.Fatalf("normalizeFetchedSheetTags() = %q, want %q", got, want)
 	}
@@ -50,7 +61,7 @@ func TestNormalizeFetchedSheetTags(t *testing.T) {
 func TestNormalizeFetchedSheetTagsLeavesExistingIDAlone(t *testing.T) {
 	t.Parallel()
 
-	input := `<sheet token="sheet" id="xyz" rows="5" cols="8"/>`
+	input := `<sheet id="jkxrFs" token="FhJTsZVIihsBEStE5RVcr6Fbnrf"></sheet>`
 	if got := normalizeFetchedSheetTags(input); got != input {
 		t.Fatalf("normalizeFetchedSheetTags() = %q, want unchanged %q", got, input)
 	}
@@ -61,7 +72,7 @@ func TestNormalizeFetchedDocumentContent(t *testing.T) {
 
 	data := map[string]interface{}{
 		"document": map[string]interface{}{
-			"content": `<file token="file_video_123" name="demo.mp4"/>` + "\n" + `<sheet token="sheet_xyz" rows="5" cols="8"/>`,
+			"content": `<figure view-type="Preview"><source href="https://example.com/video" mime="video/quicktime" token="RXwJbGRG9orDqhxuYKvch0TqnBf"/></figure>` + "\n" + `<sheet sheet-id="jkxrFs" token="FhJTsZVIihsBEStE5RVcr6Fbnrf"></sheet>`,
 		},
 	}
 
@@ -69,7 +80,7 @@ func TestNormalizeFetchedDocumentContent(t *testing.T) {
 
 	doc := data["document"].(map[string]interface{})
 	got := doc["content"].(string)
-	want := `<video controls src="feishu://media/file_video_123" data-name="demo.mp4"></video>` + "\n" + `<sheet token="sheet" id="xyz" rows="5" cols="8"/>`
+	want := `<video controls src="feishu://media/RXwJbGRG9orDqhxuYKvch0TqnBf" data-mime="video/quicktime" data-view-type="Preview"></video>` + "\n" + `<sheet id="jkxrFs" token="FhJTsZVIihsBEStE5RVcr6Fbnrf"></sheet>`
 	if got != want {
 		t.Fatalf("normalizeFetchedDocumentContent() = %q, want %q", got, want)
 	}
